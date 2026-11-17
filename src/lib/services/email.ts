@@ -9,6 +9,13 @@ import { type EmailTemplateKind } from "../types/domain.ts";
 import { getEnv, isLocalDeployment, type EnvSource } from "../utils/env.ts";
 import { buildEmailAddresses, type EmailAddresses } from "./email-addresses.ts";
 import {
+  createGraphSender,
+  GRAPH_ENV_KEYS,
+  GRAPH_MAX_ATTACHMENT_BYTES,
+  readGraphConfig,
+  type GraphFetch,
+} from "./email-graph.ts";
+import {
   assertServiceConfig,
   ServiceConfigurationError,
 } from "./service-config.ts";
@@ -21,7 +28,7 @@ const EMAIL_ENV_KEYS = ["RESEND_API_KEY"] as const;
 const DEFAULT_CAPTURE_DIR = ".data/outbox";
 const DEFAULT_CAPTURE_SENDER_ADDRESS = "dev@signudoc.localhost";
 
-export type EmailDriver = "capture" | "resend";
+export type EmailDriver = "capture" | "graph" | "resend";
 
 export type EmailAttachment = {
   content: Uint8Array;
@@ -36,12 +43,24 @@ export type EmailAttachment = {
  */
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
+/** The most attachments can add up to with the driver this install uses. */
+export function maxAttachmentBytes(env: EnvSource = process.env): number {
+  try {
+    return resolveEmailDriver(env) === "graph"
+      ? GRAPH_MAX_ATTACHMENT_BYTES
+      : MAX_ATTACHMENT_BYTES;
+  } catch {
+    return MAX_ATTACHMENT_BYTES;
+  }
+}
+
 export function fitsAsAttachments(
   attachments: readonly EmailAttachment[],
+  env: EnvSource = process.env,
 ): boolean {
   return (
     attachments.reduce((total, item) => total + item.content.byteLength, 0) <=
-    MAX_ATTACHMENT_BYTES
+    maxAttachmentBytes(env)
   );
 }
 
@@ -68,6 +87,8 @@ export type EmailSendOptions = {
 
 type CreateEmailServiceOptions = {
   env?: EnvSource;
+  /** Replaced in tests, so that nothing talks to Microsoft. */
+  graphFetch?: GraphFetch;
   /** Replaced in tests, where there is no database to read settings from. */
   resolveAddresses?: () => Promise<EmailAddresses>;
   resendClient?: Resend;
@@ -192,12 +213,16 @@ export function resolveEmailDriver(env: EnvSource = process.env): EmailDriver {
     return "resend";
   }
 
-  if (configuredDriver === "capture" || configuredDriver === "resend") {
+  if (
+    configuredDriver === "capture" ||
+    configuredDriver === "graph" ||
+    configuredDriver === "resend"
+  ) {
     return configuredDriver;
   }
 
   throw new Error(
-    `Unknown EMAIL_DRIVER "${configuredDriver}". Use "resend" or "capture".`,
+    `Unknown EMAIL_DRIVER "${configuredDriver}". Use "resend", "graph" or "capture".`,
   );
 }
 
@@ -294,6 +319,8 @@ export async function resolveEmailAddresses(
 ): Promise<EmailAddresses> {
   const settings = await getSettings(env);
 
+  // With EMAIL_DRIVER=graph the sender is the MICROSOFT_GRAPH_SENDER
+  // mailbox, which resolveSettings has already put in place.
   return resolveEmailDriver(env) === "capture"
     ? buildEmailAddresses(settings, DEFAULT_CAPTURE_SENDER_ADDRESS)
     : buildEmailAddresses(settings);
@@ -314,14 +341,74 @@ export function isEmailNotConnectedError(error: unknown): boolean {
   );
 }
 
+/**
+ * Microsoft 365 through Microsoft Graph. Graph has no batch send and no
+ * idempotency keys, so a batch is sent one message at a time.
+ */
+function createGraphEmailService(
+  env: EnvSource,
+  resolveAddresses: () => Promise<EmailAddresses>,
+  wait: (milliseconds: number) => Promise<void>,
+  graphFetch?: GraphFetch,
+): EmailService {
+  assertServiceConfig("email", GRAPH_ENV_KEYS, env);
+
+  const sender = createGraphSender({
+    config: readGraphConfig(env)!,
+    fetch: graphFetch,
+    wait,
+  });
+
+  async function deliver(
+    message: TransactionalEmailMessage,
+  ): Promise<EmailDeliveryResult> {
+    const config = await resolveAddresses();
+
+    await sender.send({
+      attachments: message.attachments,
+      from: config.senderAddress,
+      htmlBody: message.htmlBody,
+      replyTo: message.replyTo ?? config.supportAddress ?? undefined,
+      subject: message.subject,
+      textBody: message.textBody,
+      to: message.to,
+    });
+
+    // sendMail answers 202 with no body: Exchange gives no message id.
+    return { accepted: [message.to], rejected: [] };
+  }
+
+  return {
+    send: (message) => deliver(message),
+    async sendBatch(messages) {
+      if (messages.some((message) => message.attachments?.length)) {
+        throw new Error("Messages with attachments must be sent one by one.");
+      }
+
+      const results: EmailDeliveryResult[] = [];
+
+      for (const message of messages) {
+        results.push(await deliver(message));
+      }
+
+      return results;
+    },
+  };
+}
+
 export function createEmailService({
   env = process.env,
+  graphFetch,
   resolveAddresses = () => resolveEmailAddresses(env),
   resendClient,
   wait = waitFor,
 }: CreateEmailServiceOptions = {}): EmailService {
   if (!resendClient && resolveEmailDriver(env) === "capture") {
     return createCaptureEmailService(env, resolveAddresses);
+  }
+
+  if (!resendClient && resolveEmailDriver(env) === "graph") {
+    return createGraphEmailService(env, resolveAddresses, wait, graphFetch);
   }
 
   if (!resendClient) {

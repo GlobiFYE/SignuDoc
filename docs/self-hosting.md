@@ -340,9 +340,49 @@ Away from Vercel, a few things Vercel does for you are yours to set:
 - `DATABASE_URL`, pointing at your Postgres. Run `npm run db:migrate` on every deploy; it only applies what is new.
 - `APP_URL`, the site's public HTTPS address.
 - `BETTER_AUTH_SECRET`, at least 32 characters (`openssl rand -hex 32`). Without it a secret is derived from the database password, which must then be at least 12 characters long.
-- `RESEND_API_KEY`, from your Resend account.
+- `RESEND_API_KEY`, from your Resend account, or the Microsoft 365 settings below.
 - Files are kept on the machine's disk under `.data/storage` (`STORAGE_LOCAL_DIR` changes where), so that disk must survive restarts. To use a Vercel Blob store from elsewhere, set `BLOB_READ_WRITE_TOKEN`.
-- Leave `EMAIL_DRIVER` unset. The capture driver is for development only.
+- Leave `EMAIL_DRIVER` unset to send through Resend, or set it to `graph` to [send through Microsoft 365](#send-email-through-microsoft-365). The capture driver is for development only.
+
+### Send email through Microsoft 365
+
+An organization whose mail is already in Microsoft 365 can send from one of its own mailboxes instead of through Resend. The app signs in to Microsoft Graph as itself and sends from that mailbox. There is no domain to verify: Exchange already sends for your domain, and a copy of every message is kept in the mailbox's Sent Items.
+
+1. **Create the mailbox.** A shared mailbox is enough and needs no licence, for example `sign@yourcompany.com`:
+
+   ```powershell
+   Connect-ExchangeOnline
+   New-Mailbox -Shared -Name "Signatures" -PrimarySmtpAddress sign@yourcompany.com
+   ```
+
+2. **Register the app.** In the Microsoft Entra admin center, under App registrations, create a registration (single tenant, no redirect URI) and add a client secret. Note the tenant ID, the application (client) ID and the secret. **Do not** add the Mail.Send permission there: granted in Entra, it lets the app send as anyone in your organization.
+
+3. **Allow the app to send from that mailbox only.** With Exchange Online's RBAC for Applications, give the app the Application Mail.Send role, scoped to the mailbox:
+
+   ```powershell
+   # The enterprise application's object ID, from Entra under Enterprise applications.
+   New-ServicePrincipal -AppId <client-id> -ObjectId <enterprise-app-object-id> -DisplayName "SignuDoc"
+   New-ManagementScope -Name "SignuDoc sender" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'sign@yourcompany.com'"
+   New-ManagementRoleAssignment -App <client-id> -Role "Application Mail.Send" -CustomResourceScope "SignuDoc sender"
+   ```
+
+   `Test-ServicePrincipalAuthorization -Identity <client-id> -Resource sign@yourcompany.com` should then show the role as in scope. Changes can take up to an hour to apply.
+
+4. **Set the variables** where the app runs, and restart it:
+
+   | Variable                        | Value                                            |
+   | ------------------------------- | ------------------------------------------------ |
+   | `EMAIL_DRIVER`                  | `graph`                                          |
+   | `MICROSOFT_GRAPH_TENANT_ID`     | The directory (tenant) ID.                       |
+   | `MICROSOFT_GRAPH_CLIENT_ID`     | The application (client) ID.                     |
+   | `MICROSOFT_GRAPH_CLIENT_SECRET` | The client secret.                               |
+   | `MICROSOFT_GRAPH_SENDER`        | The mailbox, for example `sign@yourcompany.com`. |
+
+   The mailbox is then the sender, and "Send email from" in Settings shows it and cannot be changed there. The organization name is still used as the display name.
+
+5. **Send yourself a test email** from Settings, Organization. A refusal comes back in Microsoft's words: `ErrorAccessDenied` usually means the role assignment of step 3 is missing or has not applied yet.
+
+Graph takes at most 4 MB in one message, so signed copies larger than about 3 MB are sent as download links rather than attachments. Client secrets expire (after two years at most): put a reminder in your calendar to rotate it. National clouds set `MICROSOFT_GRAPH_AUTHORITY_HOST` and `MICROSOFT_GRAPH_HOST`, for example `https://login.microsoftonline.us` and `https://graph.microsoft.us`.
 
 Self-hosted operators are responsible for:
 

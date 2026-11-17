@@ -56,6 +56,7 @@ export type OrganizationSettingsView = {
   retentionDays: string;
   senderAddress: string;
   senderAddressFromEnv: boolean;
+  senderAddressVariable: string;
   signupMode: AppSettings["signupMode"];
   supportAddress: string;
   supportAddressFromEnv: boolean;
@@ -83,6 +84,7 @@ export function toOrganizationSettingsView(
       settings.retentionDays === null ? "" : String(settings.retentionDays),
     senderAddress: settings.senderAddress ?? "",
     senderAddressFromEnv: settings.senderAddressFromEnv,
+    senderAddressVariable: settings.senderAddressVariable,
     signupMode: settings.signupMode,
     supportAddress: settings.supportAddress ?? "",
     supportAddressFromEnv: settings.supportAddressFromEnv,

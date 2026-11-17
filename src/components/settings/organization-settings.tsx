@@ -281,7 +281,7 @@ export function OrganizationSettings({
                 error={errors.senderAddress}
                 helper={
                   values.senderAddressFromEnv
-                    ? "Set by the RESEND_FROM_EMAIL environment variable."
+                    ? `Set by the ${values.senderAddressVariable} environment variable.`
                     : "The address emails come from, at a domain you own. A subdomain such as notifications@sign.yourcompany.com keeps this site's mail apart from your everyday email."
                 }
                 label="Send email from"
@@ -506,6 +506,7 @@ function EmailSetupPanel() {
   const canSendTest =
     status !== null &&
     status.state !== "missing_key" &&
+    status.state !== "graph_missing_config" &&
     status.state !== "capture";
 
   return (
@@ -642,6 +643,36 @@ function describeEmailStatus(status: EmailStatus): {
         ready: true,
         title: "Emails are being captured, not sent",
       };
+    case "graph_missing_config":
+      return {
+        lines: [
+          "EMAIL_DRIVER is set to graph, so email goes out through Microsoft 365, but some of its settings are missing. Nothing can be sent until they are set.",
+        ],
+        ready: false,
+        steps: [
+          {
+            text: `Set ${status.missing.join(", ")} where this site runs. The self-hosting guide explains where each value comes from.`,
+          },
+          { text: "Restart the app, then reload this page." },
+        ],
+        title: "Microsoft 365 is not fully configured",
+      };
+    case "graph":
+      return status.ready
+        ? {
+            lines: [
+              `Emails go out through Microsoft 365 from ${status.senderAddress}. A copy of each one is kept in that mailbox's Sent Items.`,
+            ],
+            ready: true,
+            title: "Email is working",
+          }
+        : {
+            lines: [
+              `Emails go out through Microsoft 365 from ${status.senderAddress}. Send yourself a test email to check that the app is allowed to use that mailbox.`,
+            ],
+            ready: false,
+            title: "Send a test email to finish",
+          };
     case "missing_key":
       return status.onVercel
         ? {

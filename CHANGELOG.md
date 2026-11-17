@@ -8,6 +8,13 @@ release says when it does.
 
 ## [Unreleased]
 
+### Email
+
+- Email can be sent through Microsoft 365 instead of Resend: set
+  `EMAIL_DRIVER=graph` and the `MICROSOFT_GRAPH_*` variables. The app sends
+  from one mailbox through Microsoft Graph, with no domain to verify. See
+  "Send email through Microsoft 365" in docs/self-hosting.md.
+
 ## [0.3.0] - 2026-11-16
 
 Sign-in security and audit features for organizations that need them, and

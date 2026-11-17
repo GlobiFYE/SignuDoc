@@ -68,6 +68,8 @@ export type AppSettings = {
 export type ResolvedSettings = AppSettings & {
   hosted: boolean;
   senderAddressFromEnv: boolean;
+  /** The variable that would set the sender, to name it in Settings. */
+  senderAddressVariable: string;
   supportAddressFromEnv: boolean;
 };
 
@@ -314,6 +316,7 @@ export function resolveSettings(
     hosted: isHostedMode(env),
     senderAddress: emailEnv.senderAddress ?? settings.senderAddress,
     senderAddressFromEnv: emailEnv.senderAddress !== undefined,
+    senderAddressVariable: emailEnv.senderAddressVariable,
     supportAddress: emailEnv.supportAddress ?? settings.supportAddress,
     supportAddressFromEnv: emailEnv.supportAddress !== undefined,
   };

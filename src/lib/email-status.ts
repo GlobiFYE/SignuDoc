@@ -7,6 +7,7 @@ import {
   isResendTestSender,
 } from "./services/email-addresses.ts";
 import { resolveEmailDriver } from "./services/email.ts";
+import { GRAPH_ENV_KEYS, readGraphConfig } from "./services/email-graph.ts";
 import {
   getSettings,
   markEmailReady,
@@ -38,6 +39,13 @@ export type EmailDnsRecord = {
 export type EmailStatus =
   /** Development: messages are written to disk, not sent. */
   | { state: "capture" }
+  /** EMAIL_DRIVER=graph, but some of its variables are not set. */
+  | { state: "graph_missing_config"; missing: string[] }
+  /**
+   * Sending through Microsoft 365. There is no domain to check: Exchange
+   * already sends for it. Ready once a test email has gone out.
+   */
+  | { state: "graph"; ready: boolean; senderAddress: string }
   /**
    * No Resend API key, so nothing can be sent. On Vercel the steps to fix it
    * are Vercel's, which the page spells out.
@@ -386,6 +394,35 @@ async function inspectEmail({
       domainId: null,
       markReady: noop,
       status: { state: "capture" },
+    };
+  }
+
+  if (!domainsClient && resolveEmailDriver(env) === "graph") {
+    const graph = readGraphConfig(env);
+
+    if (!graph) {
+      return {
+        client: null,
+        domainId: null,
+        markReady: noop,
+        status: {
+          missing: GRAPH_ENV_KEYS.filter((key) => !readEnv(env, key)),
+          state: "graph_missing_config",
+        },
+      };
+    }
+
+    const resolvedSettings = settings ?? (await getSettings(env));
+
+    return {
+      client: null,
+      domainId: null,
+      markReady: noop,
+      status: {
+        ready: resolvedSettings.emailReadyAt !== null,
+        senderAddress: graph.sender,
+        state: "graph",
+      },
     };
   }
 

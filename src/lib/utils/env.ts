@@ -259,6 +259,20 @@ export function isHostedMode(env: EnvSource = process.env): boolean {
   return value === "1" || value === "true";
 }
 
+/**
+ * The variable that fixes the address email is sent from. Microsoft 365
+ * sends from the one mailbox the app is allowed to use, so with
+ * EMAIL_DRIVER=graph that mailbox is the sender and cannot be changed in
+ * Settings.
+ */
+export function senderAddressVariable(
+  env: EnvSource = process.env,
+): "MICROSOFT_GRAPH_SENDER" | "RESEND_FROM_EMAIL" {
+  return readEnv(env, "EMAIL_DRIVER")?.toLowerCase() === "graph"
+    ? "MICROSOFT_GRAPH_SENDER"
+    : "RESEND_FROM_EMAIL";
+}
+
 // Every value is optional here. Code that needs one checks it at the point of
 // use (see requireConfigValue), so a missing email setting cannot stop a page
 // that never sends email from rendering.
@@ -272,7 +286,8 @@ export function getEnv(env: EnvSource = process.env) {
     },
     email: {
       apiKey: readEnv(env, "RESEND_API_KEY"),
-      senderAddress: readEnv(env, "RESEND_FROM_EMAIL"),
+      senderAddress: readEnv(env, senderAddressVariable(env)),
+      senderAddressVariable: senderAddressVariable(env),
       supportAddress: readEnv(env, "SUPPORT_EMAIL"),
     },
     internal: {
