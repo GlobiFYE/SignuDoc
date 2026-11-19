@@ -9,6 +9,7 @@ import { Part11Panel } from "@/components/settings/part11-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignerDataPanel } from "@/components/settings/signer-data-panel";
+import { TeamsPanel } from "@/components/settings/teams-panel";
 import type { EmailDnsRecord, EmailStatus } from "@/lib/email-status";
 import type {
   OrganizationSettingsField,
@@ -400,6 +401,8 @@ export function OrganizationSettings({
         {/* The hosted service's accounts are strangers to each other, not
             one organization, so it has no list of them here. */}
         {!values.hosted ? <PeoplePanel part11Mode={values.part11Mode} /> : null}
+
+        {!values.hosted ? <TeamsPanel /> : null}
 
         {!values.hosted ? (
           <SecurityPanel

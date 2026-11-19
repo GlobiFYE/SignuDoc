@@ -8,6 +8,17 @@ release says when it does.
 
 ## [Unreleased]
 
+### Added
+
+- Teams. An administrator makes teams in Settings and puts people on them.
+  People on a team see the envelopes their teammates have sent, read-only,
+  in a "My team" view on the dashboard, and can download their audit trail
+  and, once finished, the signed PDF and certificate. Drafts stay private,
+  and only the sender changes an envelope. Team changes and teammates'
+  downloads are recorded in the site audit trail. See
+  [docs/teams.md](docs/teams.md). This changes the database
+  (`20261119100000_teams.sql`).
+
 ## [0.5.0] - 2026-11-18
 
 Administrators can now see every member's envelopes and delete finished ones
