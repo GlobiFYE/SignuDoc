@@ -869,6 +869,13 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
     ).toBeVisible();
     // A retention period would delete regulated records on a timer.
     await expect(page.getByLabel("Days to keep")).toBeDisabled();
+    // Part 11 signers need an account, so the sign-up rule covers them too.
+    await expect(
+      page.getByText("Part 11 mode is on, so this covers signers too."),
+    ).toBeVisible();
+    await expect(
+      page.getByText("People who are sent a document to sign don't need"),
+    ).toHaveCount(0);
   });
 
   await test.step("the signer makes an account and confirms their email", async () => {
@@ -1064,6 +1071,11 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
         })
       ).status(),
     ).toBe(200);
+    // With the mode off, ordinary signers again need no account.
+    await page.goto("/settings");
+    await expect(
+      page.getByText("People who are sent a document to sign don't need"),
+    ).toBeVisible();
   });
 });
 

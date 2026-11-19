@@ -225,8 +225,9 @@ export function OrganizationSettings({
               Who can create an account
             </legend>
             <p className="clear-both max-w-2xl text-sm leading-6 text-(--secondary)">
-              This is about people who send documents. People who are sent a
-              document to sign never need an account.
+              {values.part11Mode
+                ? "Part 11 mode is on, so this covers signers too. A Part 11 envelope goes only to someone with an account here whose identity an administrator has confirmed under People, so choose a rule that lets the people you send to create one."
+                : "This is about people who send documents. People who are sent a document to sign don't need an account."}
             </p>
             <div className="space-y-3">
               {signupModeOptions.map((option) => (
