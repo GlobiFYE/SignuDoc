@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MAX_SIGNERS_CEILING } from "../types/domain.ts";
+import { MAX_SIGNERS_CEILING, recipientRoles } from "../types/domain.ts";
 import {
   emailSchema,
   envelopeTitleSchema,
@@ -27,6 +27,9 @@ export const templateRoleSchema = z.object({
   // sign at the same time. Templates saved before steps existed have none,
   // and their roles sign one after the other.
   step: z.number().int().positive().max(MAX_SIGNERS_CEILING).optional(),
+  // Whether the person in this role signs or only approves. Templates
+  // saved before approvers existed have none, and every role signs.
+  kind: z.enum(recipientRoles).optional(),
 });
 
 /** A template's roles, in the order their people will sign. */

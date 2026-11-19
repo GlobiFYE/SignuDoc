@@ -292,11 +292,13 @@ export async function saveEnvelopeAsTemplate(
   }
 
   // Each role keeps its signer's step, so roles that signed at the same
-  // time still do when the template is used.
+  // time still do when the template is used, and whether they sign or
+  // approve.
   const steps = normalizeSigningSteps(signers.map((signer) => signer.step));
   const roles = templateRolesSchema.parse(
     roleNames.map((name, index) => ({
       id: randomUUID(),
+      kind: signers[index]?.role ?? "signer",
       name,
       step: steps[index],
     })),
@@ -489,6 +491,7 @@ export async function createDraftFromTemplate(
         // steps existed has none, and its people sign one after the other.
         signers: parsedInput.signers.map((signer, index) => ({
           ...signer,
+          role: roles.data[index]?.kind ?? "signer",
           ...(roleSteps ? { signingStep: roleSteps[index] } : {}),
         })),
       },

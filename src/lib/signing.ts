@@ -28,6 +28,7 @@ import {
   type SigningSubmission,
 } from "./schemas/field.ts";
 import {
+  approvalSubmissionSchema,
   signerCheckRequestSchema,
   signerConsentRequestSchema,
   signingFieldFitRequestSchema,
@@ -171,6 +172,7 @@ type SigningSignerRow = {
   lastNotifiedAt: number | null;
   lastNudgedAt: number | null;
   name: string;
+  role: "approver" | "signer";
   signOrder: number;
   signingStep: number | null;
   signatureMeaning:
@@ -297,6 +299,11 @@ export class SigningAccessError extends Error {
   }
 }
 
+/** An approver reviews and approves or rejects; they sign nothing. */
+function isApprover(signer: { role?: string | null }): boolean {
+  return signer.role === "approver";
+}
+
 function getSigningUnavailableMessage(
   state: SigningUnavailableResponse["state"],
 ): string {
@@ -325,6 +332,10 @@ function getSigningConsentUrl(token: string): string {
   return `/api/signing/${encodeURIComponent(token)}/consent`;
 }
 
+function getSigningApproveUrl(token: string): string {
+  return `/api/signing/${encodeURIComponent(token)}/approve`;
+}
+
 function getSigningFieldFitUrl(token: string): string {
   return `/api/signing/${encodeURIComponent(token)}/fit`;
 }
@@ -336,10 +347,15 @@ function getSigningDeclineUrl(token: string): string {
 function getSigningDoneRedirectPath(
   token: string,
   envelopeTitle: string,
+  approved = false,
 ): string {
   const searchParams = new URLSearchParams();
 
   searchParams.set("title", envelopeTitle);
+
+  if (approved) {
+    searchParams.set("approved", "1");
+  }
 
   return `/sign/${encodeURIComponent(token)}/done?${searchParams.toString()}`;
 }
@@ -403,20 +419,23 @@ function buildDeclineNotificationEmail(input: {
   declineReason?: string;
   envelopeId: string;
   envelopeTitle: string;
+  /** An approver rejected it, rather than a signer declining. */
+  rejected?: boolean;
   senderEmail: string;
   senderName: string;
   signerEmail: string;
   signerName: string;
 }) {
   const envelopeUrl = getEnvelopeUrl(input.envelopeId);
-  const subject = `"${input.envelopeTitle}" was declined by ${input.signerName}`;
+  const verb = input.rejected ? "rejected" : "declined";
+  const subject = `"${input.envelopeTitle}" was ${verb} by ${input.signerName}`;
   const reasonLine = input.declineReason?.trim()
     ? `Reason provided: ${input.declineReason.trim()}`
     : null;
   const textBody = [
     `Hi ${input.senderName},`,
     "",
-    `${input.signerName} (${input.signerEmail}) declined "${input.envelopeTitle}" in ${input.branding.productName}.`,
+    `${input.signerName} (${input.signerEmail}) ${verb} "${input.envelopeTitle}" in ${input.branding.productName}.`,
     ...(reasonLine ? ["", reasonLine] : []),
     "",
     "Review the envelope:",
@@ -424,7 +443,7 @@ function buildDeclineNotificationEmail(input: {
   ].join("\n");
   const htmlBody = [
     `<p>Hi ${escapeHtml(input.senderName)},</p>`,
-    `<p>${escapeHtml(input.signerName)} (${escapeHtml(input.signerEmail)}) declined &ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; in ${escapeHtml(input.branding.productName)}.</p>`,
+    `<p>${escapeHtml(input.signerName)} (${escapeHtml(input.signerEmail)}) ${verb} &ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; in ${escapeHtml(input.branding.productName)}.</p>`,
     reasonLine
       ? `<p><strong>Reason provided:</strong> ${escapeHtml(input.declineReason!.trim())}</p>`
       : "",
@@ -594,6 +613,7 @@ async function listSignerRows(
         envelope_id AS "envelopeId",
         name,
         email,
+        role,
         sign_order AS "signOrder",
         signing_step AS "signingStep",
         status,
@@ -611,8 +631,9 @@ async function listSignerRows(
         updated_at AS "updatedAt"
       FROM signers
       WHERE envelope_id = $1
-        -- Copy recipients are not part of the signing order.
-        AND role = 'signer'
+        -- Copy recipients are not part of the signing order. Approvers
+        -- are, and move it on exactly as signers do.
+        AND role IN ('signer', 'approver')
       ORDER BY sign_order ASC, id ASC
     `,
     [envelopeId],
@@ -1013,12 +1034,16 @@ function buildSignedAuditEvent(input: {
   submittedAt: number;
   timezoneOffsetMinutes: number;
 }): AuditEventRecord {
+  // An approver's decision is its own event, never "signed": the audit
+  // trail and the certificate must not show an approval as a signature.
+  const approval = isApprover(input.signer);
+
   return {
     actorEmail: input.signer.email,
     actorType: "signer",
     createdAt: input.submittedAt,
     envelopeId: input.envelopeId,
-    event: "signed",
+    event: approval ? "approved" : "signed",
     id: randomUUID(),
     ipAddress: input.requestMeta.ipAddress ?? null,
     metadata: {
@@ -1027,6 +1052,7 @@ function buildSignedAuditEvent(input: {
       signerName: input.signer.name,
       signerOrder: input.signer.signOrder,
       signingStep: signingStepOf(input.signer),
+      ...(approval ? { role: "approver" } : {}),
       authMethods: [...input.authMethods],
       signatureMethods: [...input.signatureMethods],
       timezoneOffsetMinutes: input.timezoneOffsetMinutes,
@@ -1040,6 +1066,8 @@ function buildSignedAuditEvent(input: {
 }
 
 function buildDeclinedAuditEvent(input: {
+  /** The checks the person passed before declining or rejecting. */
+  authMethods: readonly string[];
   declinedAt: number;
   envelopeId: string;
   reason?: string;
@@ -1051,7 +1079,8 @@ function buildDeclinedAuditEvent(input: {
     actorType: "signer",
     createdAt: input.declinedAt,
     envelopeId: input.envelopeId,
-    event: "declined",
+    // An approver rejects; the envelope ends the same way as a decline.
+    event: isApprover(input.signer) ? "rejected" : "declined",
     id: randomUUID(),
     ipAddress: input.requestMeta.ipAddress ?? null,
     metadata: {
@@ -1061,6 +1090,8 @@ function buildDeclinedAuditEvent(input: {
       signerName: input.signer.name,
       signerOrder: input.signer.signOrder,
       signingStep: signingStepOf(input.signer),
+      ...(isApprover(input.signer) ? { role: "approver" } : {}),
+      authMethods: [...input.authMethods],
     },
     userAgent: input.requestMeta.userAgent ?? null,
   };
@@ -1804,7 +1835,10 @@ async function resolveSigningContext(
   }
 
   if (signer.status === "signed") {
-    throw new SigningAccessError("already-signed");
+    throw new SigningAccessError(
+      "already-signed",
+      isApprover(signer) ? "You've already approved this document." : undefined,
+    );
   }
 
   if (typeof signer.signOrder !== "number") {
@@ -1973,7 +2007,11 @@ export async function getSigningPayloadForToken(
       id: context.signer.id,
       name: context.signer.name,
       order: context.signer.signOrder,
+      role: isApprover(context.signer) ? "approver" : "signer",
     },
+    ...(isApprover(context.signer)
+      ? { approveUrl: getSigningApproveUrl(token) }
+      : {}),
     state: "ready",
     submitUrl: getSigningSubmitUrl(token),
     visibleFields,
@@ -2216,6 +2254,28 @@ function buildSignerSubmission(
       field.signerId === currentSignerId && typeof field.id === "string",
   );
 
+  // An approver has no fields: saving fields and sending both refuse one
+  // that does, and so does the database. Should one turn up all the same,
+  // nothing is approved, rather than leaving their fields empty.
+  if (isApprover(context.signer)) {
+    if (currentSignerFields.length > 0) {
+      throw new SigningMutationError(
+        "This document has fields for an approver. Ask the sender to send it again.",
+        409,
+      );
+    }
+
+    return {
+      currentSignerFields,
+      currentSignerId,
+      drawnSignatureUploads: [] as Array<{
+        body: Uint8Array;
+        imageKey: string;
+      }>,
+      fieldUpdates: new Map<string, FieldPersistenceUpdate>(),
+    };
+  }
+
   if (currentSignerFields.length === 0) {
     throw new SigningMutationError(
       "No signable fields are assigned to this signer.",
@@ -2448,7 +2508,27 @@ export async function submitSigningForToken(
   input: unknown,
   options: SubmitSigningOptions = {},
 ): Promise<SigningSubmitResponse> {
-  return retryWhileRouteChanges(() => submitSigningOnce(token, input, options));
+  return retryWhileRouteChanges(() =>
+    submitSigningOnce(token, input, options, { approval: false }),
+  );
+}
+
+/**
+ * An approver approves. Everything a signature goes through applies, from
+ * the checks and the consent to the locking and the restart when the route
+ * changed underneath it, so of a signer and an approver of one step who
+ * finish at the same moment exactly one moves the order on, as with two
+ * signers. Only what is recorded differs: no fields, and an "approved"
+ * event instead of "signed".
+ */
+export async function approveSigningForToken(
+  token: string,
+  input: unknown,
+  options: Omit<SubmitSigningOptions, "providerSignature"> = {},
+): Promise<SigningSubmitResponse> {
+  return retryWhileRouteChanges(() =>
+    submitSigningOnce(token, input, options, { approval: true }),
+  );
 }
 
 async function submitSigningOnce(
@@ -2463,13 +2543,45 @@ async function submitSigningOnce(
     verifiedMethods = [],
     verifyPassword,
   }: SubmitSigningOptions = {},
+  { approval }: { approval: boolean },
 ): Promise<SigningSubmitResponse> {
-  const parsedInput = signingSubmissionSchema.parse(input);
+  const parsedInput: SigningSubmission = approval
+    ? {
+        ...approvalSubmissionSchema.parse(input),
+        fields: [],
+      }
+    : signingSubmissionSchema.parse(input);
   const context = await resolveSigningContext(token, { database });
+
+  if (approval !== isApprover(context.signer)) {
+    throw new SigningMutationError(
+      approval
+        ? "This link is for signing, not approving."
+        : "This link is for approving. Approve or reject the document from the page.",
+      409,
+    );
+  }
+
+  // Approvers are refused at sending on Part 11 envelopes and on envelopes
+  // signed through a signing provider (envelopes.ts). Checked again here so
+  // an approval can never stand where one of those signatures belongs.
+  if (
+    approval &&
+    (context.envelope.part11 ||
+      (context.envelope.signatureLevel ?? "simple") !== "simple" ||
+      providerSignature)
+  ) {
+    throw new SigningMutationError(
+      "This document cannot be approved here. Ask the sender to send it again.",
+      409,
+    );
+  }
 
   // A document sent for advanced or qualified signatures is signed by each
   // signer's provider, never by a plain submit, and the other way round.
-  if ((context.envelope.signatureLevel ?? "simple") === "simple") {
+  if (approval) {
+    // Nothing to check: no provider is involved in an approval.
+  } else if ((context.envelope.signatureLevel ?? "simple") === "simple") {
     if (providerSignature) {
       throw new SigningMutationError(
         "This document is not signed through a signing provider.",
@@ -2541,6 +2653,7 @@ async function submitSigningOnce(
       email: string;
       id: string;
       name: string;
+      role: "approver" | "signer";
       url: string;
     }[] = [];
 
@@ -2714,6 +2827,7 @@ async function submitSigningOnce(
           const activatedNextSigner = await queryOne<{
             email: string;
             name: string;
+            role: "approver" | "signer";
           }>(
             tx,
             `
@@ -2727,9 +2841,9 @@ async function submitSigningOnce(
                 updated_at = $5
               WHERE id = $6
                 AND envelope_id = $7
-                AND role = 'signer'
+                AND role IN ('signer', 'approver')
                 AND status = 'pending'
-              RETURNING name, email
+              RETURNING name, email, role
             `,
             [
               link.tokenHash,
@@ -2753,6 +2867,7 @@ async function submitSigningOnce(
             email: activatedNextSigner.email,
             id: nextSigner.id,
             name: activatedNextSigner.name,
+            role: activatedNextSigner.role,
             url: link.url,
           });
         }
@@ -2785,6 +2900,7 @@ async function submitSigningOnce(
               branding: await getBranding(),
               envelopeTitle: context.envelope.title,
               expiresAt: nextSignerDeadline,
+              role: nextSignerDelivery.role,
               senderName: normalizeSenderName(context.sender),
               signerEmail: nextSignerDelivery.email,
               signerName: nextSignerDelivery.name,
@@ -2812,7 +2928,11 @@ async function submitSigningOnce(
 
       return signingSubmitResponseSchema.parse({
         envelopeId: context.envelope.id,
-        redirectPath: getSigningDoneRedirectPath(token, context.envelope.title),
+        redirectPath: getSigningDoneRedirectPath(
+          token,
+          context.envelope.title,
+          approval,
+        ),
         submittedAt,
       });
     }
@@ -2888,7 +3008,7 @@ async function submitSigningOnce(
           `
             SELECT id FROM signers
             WHERE envelope_id = $1
-              AND role = 'signer'
+              AND role IN ('signer', 'approver')
               AND id <> $2
               AND status <> 'signed'
             LIMIT 1
@@ -3099,7 +3219,11 @@ async function submitSigningOnce(
 
     return signingSubmitResponseSchema.parse({
       envelopeId: context.envelope.id,
-      redirectPath: getSigningDoneRedirectPath(token, context.envelope.title),
+      redirectPath: getSigningDoneRedirectPath(
+        token,
+        context.envelope.title,
+        approval,
+      ),
       submittedAt,
     });
   } catch (error) {
@@ -3147,7 +3271,10 @@ export async function prepareSignerSubmission(
   const parsedInput = signingSubmissionSchema.parse(input);
   const context = await resolveSigningContext(token, { database });
 
-  if ((context.envelope.signatureLevel ?? "simple") === "simple") {
+  if (
+    (context.envelope.signatureLevel ?? "simple") === "simple" ||
+    isApprover(context.signer)
+  ) {
     throw new SigningMutationError(
       "This document is not signed through a signing provider.",
       409,
@@ -3211,7 +3338,11 @@ async function declineSigningOnce(
   const parsedInput = declineEnvelopeSchema.parse(input);
   const context = await resolveSigningContext(token, { database });
 
-  await assertSignerChecksPassed(context, verifiedMethods, database);
+  const signerChecks = await assertSignerChecksPassed(
+    context,
+    verifiedMethods,
+    database,
+  );
   const emailService = createLazyEmailService();
   const storageService = createStorageService();
   const currentSignerId = context.signer.id;
@@ -3238,6 +3369,7 @@ async function declineSigningOnce(
   }
 
   const declinedAuditEvent = buildDeclinedAuditEvent({
+    authMethods: signerChecks.passed,
     declinedAt,
     envelopeId: context.envelope.id,
     reason: declineReason,
@@ -3324,7 +3456,7 @@ async function declineSigningOnce(
     const statusesNow = await tx.query<{ id: string; status: string }>(
       `
         SELECT id, status FROM signers
-        WHERE envelope_id = $1 AND role = 'signer' AND id <> $2
+        WHERE envelope_id = $1 AND role IN ('signer', 'approver') AND id <> $2
       `,
       [context.envelope.id, currentSignerId],
     );
@@ -3477,6 +3609,7 @@ async function declineSigningOnce(
         declineReason,
         envelopeId: context.envelope.id,
         envelopeTitle: context.envelope.title,
+        rejected: isApprover(context.signer),
         senderEmail: context.sender.email,
         senderName: normalizeSenderName(context.sender),
         signerEmail: context.signer.email,
