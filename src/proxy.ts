@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { GOOGLE_PICTURE_HOSTS } from "@/lib/auth/provider-claims";
 import { supportsDirectUploads } from "@/lib/services/storage/driver";
 
 const DEFAULT_PERMISSIONS_POLICY = [
@@ -63,6 +64,8 @@ function buildContentSecurityPolicy() {
         "'self'",
         "data:",
         "blob:",
+        // People's profile photos, in the account menu (provider-claims.ts).
+        ...GOOGLE_PICTURE_HOSTS.map((host) => `https://${host}`),
         preview && "https://vercel.live https://vercel.com",
       ],
     ],

@@ -14,15 +14,24 @@ import { readEnv, type EnvSource } from "../utils/env.ts";
 // provider decides who gets in, and its own rules (MFA, offboarding) apply.
 // The addresses in PASSWORD_SIGN_IN_ALLOWED_EMAILS keep their password, as a
 // way in for an administrator when the provider is down.
+//
+// With Google as the provider, sign-in is also held to Google Workspace: the
+// hd claim in Google's ID token has to be there (a personal Google account
+// has none) and, when sign-up is limited to domains, be one of those domains,
+// on every sign-in (provider-claims.ts).
 
 /** The provider id in Better Auth: its routes end in /oauth2/callback/sso. */
 export const SSO_PROVIDER_ID = "sso";
+
+export const GOOGLE_ISSUER = "https://accounts.google.com";
 
 export type SsoConfig = {
   clientId: string;
   clientSecret: string;
   /** The provider's discovery document. */
   discoveryUrl: string;
+  /** Google is the provider, so its Workspace checks apply. */
+  google: boolean;
   issuer: string;
   /** What the button says after "Continue with". */
   name: string;
@@ -88,6 +97,7 @@ export function readSsoConfig(env: EnvSource = process.env): SsoConfig | null {
     clientId,
     clientSecret,
     discoveryUrl: `${issuer}/.well-known/openid-configuration`,
+    google: issuer === GOOGLE_ISSUER,
     issuer,
     name: readEnv(env, "SSO_NAME") ?? "single sign-on",
   };
