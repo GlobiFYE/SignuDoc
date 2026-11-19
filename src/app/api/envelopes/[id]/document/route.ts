@@ -31,7 +31,7 @@ export async function GET(
   const { id } = await context.params;
 
   try {
-    // Its sender's, or any envelope for an administrator.
+    // Its sender's, or, once sent, a teammate's or any administrator's.
     const access = await resolveEnvelopeViewerAccess(
       session.user.id,
       id,
