@@ -106,7 +106,9 @@ SignuDoc sends transactional email through Resend.
 - `RESEND_FROM_EMAIL` and `SUPPORT_EMAIL` are optional. When set they take the place of the addresses saved in Settings, which then cannot be changed there, and with `SUPPORT_EMAIL` set the setup page does not ask for a support address.
 - Until a sender address is set, mail goes out from `onboarding@resend.dev`, which Resend only delivers to the owner of the Resend account.
 - In hosted mode the support address is also the contact shown on the Terms, Privacy, and Accessibility pages.
-- For local development, `EMAIL_DRIVER=capture` writes each email to `.data/outbox` as a JSON file instead of sending it. Open the newest file to find a verification or signing link. This driver refuses to run in production.
+- For local development, `EMAIL_DRIVER=capture` writes each email to `.data/outbox` as a JSON file instead of sending it. Open the newest file to find a verification or signing link. Use a delivery provider for deployed sites that need to send email.
+
+To test a production build on your machine, set `APP_URL=http://localhost:3000` and `EMAIL_DRIVER=capture` in your local `.env`. With the example database password, sign-in also needs a `BETTER_AUTH_SECRET` of at least 32 characters. Generate one with `openssl rand -hex 32` and save its output as `BETTER_AUTH_SECRET` in the same file. Run `npm run build`, then `npm run start`.
 
 ## Upload constraints
 
