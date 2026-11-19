@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import pg from "pg";
 
 import { e2eDatabaseUrl, e2eSetupToken } from "../playwright.config";
+import { openE2eClient } from "./support/database";
 import { extractLink, extractLinks, waitForEmail } from "./support/outbox";
 import { totpCode } from "./support/totp";
 import { writeLargePdf, writeSamplePdf } from "./support/sample-pdf";
@@ -746,7 +746,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
   // An install from before there were administrators has accounts but
   // nobody in charge. One of its users takes charge with the setup token.
   await test.step("an install with no administrator is claimed with the setup token", async () => {
-    const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+    const database = openE2eClient(e2eDatabaseUrl);
 
     await database.connect();
 
@@ -839,7 +839,7 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
   const runId = String(Date.now());
   const signerEmail = `part11+${runId}@example.com`;
   const signerName = "Pat Part";
-  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  const database = openE2eClient(e2eDatabaseUrl);
   let adminEmail = "";
 
   await database.connect();
@@ -1075,7 +1075,7 @@ test("a signer signs with a qualified signature in their own name, through the s
   const signerEmail = `qualified+${runId}@example.com`;
   const signerName = "Quinn Qualified";
   const signatureType = "Qualified electronic signatures through eID Easy";
-  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  const database = openE2eClient(e2eDatabaseUrl);
   let adminEmail = "";
 
   await database.connect();
@@ -1222,7 +1222,7 @@ test("a signer who declines is told the decline was recorded, not that the link 
 }, testInfo) => {
   const runId = String(Date.now());
   const signerEmail = `decliner+${runId}@example.com`;
-  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  const database = openE2eClient(e2eDatabaseUrl);
   let adminEmail = "";
 
   await database.connect();
@@ -1345,7 +1345,7 @@ test("a signer who declines is told the decline was recorded, not that the link 
     // The envelope becomes a plain member's, as if they had sent it.
     const memberId = `member-${runId}`;
     const memberEmail = `member+${runId}@example.com`;
-    const db = new pg.Client({ connectionString: e2eDatabaseUrl });
+    const db = openE2eClient(e2eDatabaseUrl);
 
     await db.connect();
 
@@ -1490,7 +1490,7 @@ test("a signer who declines is told the decline was recorded, not that the link 
 test("with local disk storage a PDF just under 20 MB uploads, and a larger request is refused", async ({
   page,
 }, testInfo) => {
-  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  const database = openE2eClient(e2eDatabaseUrl);
   let adminEmail = "";
 
   await database.connect();
@@ -1550,7 +1550,7 @@ test("two-step sign-in: an administrator sets it up and requires it of everyone"
   browser,
   page,
 }) => {
-  const database = new pg.Client({ connectionString: e2eDatabaseUrl });
+  const database = openE2eClient(e2eDatabaseUrl);
   let adminEmail = "";
   let memberEmail = "";
 

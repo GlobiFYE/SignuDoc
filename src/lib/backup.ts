@@ -5,6 +5,11 @@ import { createGunzip, createGzip } from "node:zlib";
 import { del, get, list, put } from "@vercel/blob";
 
 import { type DbPool, getDb } from "./db/connection.ts";
+import {
+  exportSqliteDatabaseLines,
+  restoreIntoSqlite,
+} from "./db/sqlite/backup.ts";
+import { isSqlitePool } from "./db/sqlite/pool.ts";
 import { readEnv, type EnvSource } from "./utils/env.ts";
 
 // A daily copy of the install to a second Vercel Blob store, kept by the
@@ -246,6 +251,16 @@ export async function* exportDatabaseLines(
   database: DbPool,
   createdAt: Date,
 ): AsyncGenerator<string> {
+  if (isSqlitePool(database)) {
+    yield* exportSqliteDatabaseLines(database, {
+      createdAt,
+      format: BACKUP_FORMAT,
+      migrationsTable: MIGRATIONS_TABLE,
+      version: BACKUP_FORMAT_VERSION,
+    });
+    return;
+  }
+
   const client = await database.connect();
 
   try {
@@ -627,6 +642,16 @@ export async function restoreDatabase({
     throw new RestoreError(
       "The database already has accounts in it. Restore into a new, empty database.",
     );
+  }
+
+  if (isSqlitePool(database)) {
+    return restoreIntoSqlite({
+      applied,
+      entries: readDatabaseBackup(found.stream),
+      fail: (message) => new RestoreError(message),
+      migrationsTable: MIGRATIONS_TABLE,
+      pool: database,
+    });
   }
 
   const client = await database.connect();
