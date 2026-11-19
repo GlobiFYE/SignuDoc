@@ -68,7 +68,7 @@ const comparisonRows: readonly ComparisonRow[] = [
   },
   {
     feature: "Signers per document",
-    signudoc: "Up to 10",
+    signudoc: "Up to 25",
     perSeat: "Varies by plan",
   },
   { feature: "Reminders", signudoc: true, perSeat: "Higher plans only" },
@@ -332,7 +332,7 @@ export function LandingShell() {
               </div>
 
               <p className="mt-7 text-sm text-white/75">
-                Free • no signer account required • up to 10 signers per
+                Free • no signer account required • up to 25 signers per
                 document
               </p>
             </div>

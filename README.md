@@ -40,7 +40,7 @@
 
 ### Prepare a document in minutes
 
-Upload a PDF, add up to 10 signers in the order they sign, and add people who only receive the finished copy. Then place fields where they belong: signature, initials, date, name, text, number, checkbox, dropdown and radio buttons, each required or optional and each tied to one signer.
+Upload a PDF, add up to 25 signers in the order they sign, or have some of them sign at the same time, and add people who only receive the finished copy. Then place fields where they belong: signature, initials, date, name, text, number, checkbox, dropdown and radio buttons, each required or optional and each tied to one signer.
 
 ![Placing signature, date and dropdown fields for two signers on a master services agreement](docs/images/prepare.png)
 
@@ -122,7 +122,7 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 |                                              | SignuDoc                                                                                                                    | DocuSign eSignature                                                          |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **Signing without an account**               | ✅                                                                                                                          | ✅                                                                           |
-| **Signing order**                            | ✅ in order, up to 10 signers                                                                                               | ✅ in order, at the same time, or mixed                                      |
+| **Signing order**                            | ✅ in order, at the same time, or mixed, up to 25 signers                                                                   | ✅ in order, at the same time, or mixed                                      |
 | **People who only get a copy**               | ✅                                                                                                                          | ✅ and more roles: approvers, editors, in-person signers                     |
 | **Field types**                              | ✅ signature, initials, date, name, text, number, checkbox, dropdown, radio, each required or optional                      | ✅ more types; dropdown, radio and signer attachments need Business Pro      |
 | **Templates**                                | ✅                                                                                                                          | ✅ from Personal, shared from Standard                                       |
@@ -140,7 +140,6 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 |                                                         | SignuDoc                                                          | DocuSign eSignature                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
 | **More than one document per envelope, and Word files** | — PDF only, one per envelope                                      | ✅                                                    |
-| **Signing at the same time**                            | — in order only                                                   | ✅                                                    |
 | **Bulk send, web forms, payments**                      | —                                                                 | ✅ on Business Pro                                    |
 | **API and webhooks**                                    | — not yet                                                         | ✅ API plans from $50 a month                         |
 | **Integrations**                                        | —                                                                 | ✅ 1,000+, including Salesforce, Microsoft and Google |
