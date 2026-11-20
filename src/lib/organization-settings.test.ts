@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { DbExecutor } from "./db/connection.ts";
 import {
+  diffSettings,
   OrganizationSettingsError,
   updateOrganizationSettings,
 } from "./organization-settings.ts";
@@ -11,6 +12,7 @@ import { resolveSettings, type AppSettings } from "./settings.ts";
 const stored: AppSettings = {
   allowedEmailDomains: ["acme.com"],
   brandColor: null,
+  consentDisclosure: null,
   emailReadyAt: null,
   logoVersion: null,
   organizationName: "Acme Corp",
@@ -30,6 +32,7 @@ const stored: AppSettings = {
 const storedRow = {
   allowed_email_domains: stored.allowedEmailDomains,
   brand_color: stored.brandColor,
+  consent_disclosure: stored.consentDisclosure,
   email_ready_at: stored.emailReadyAt,
   logo_hash: stored.logoVersion,
   organization_name: stored.organizationName,
@@ -281,4 +284,94 @@ test("the hosted service keeps its own color whatever the form sends", async () 
   );
 
   assert.equal(result.brandColor, null);
+});
+
+test("a custom disclosure is tidied and saved, and empty puts the built-in one back", async () => {
+  const current = resolveSettings(stored, {});
+  const saved = fakeDatabase();
+  const result = await updateOrganizationSettings(
+    {
+      ...form,
+      consentDisclosure: "  ## Signing online\r\nYou agree to sign online.  ",
+    },
+    current,
+    saved.database,
+  );
+
+  assert.equal(
+    result.consentDisclosure,
+    "## Signing online\nYou agree to sign online.",
+  );
+  assert.ok(saved.saved.values?.includes(result.consentDisclosure));
+
+  const cleared = await updateOrganizationSettings(
+    { ...form, consentDisclosure: "   " },
+    resolveSettings({ ...stored, consentDisclosure: "Custom words." }, {}),
+    fakeDatabase({ ...storedRow, consent_disclosure: "Custom words." })
+      .database,
+  );
+
+  assert.equal(cleared.consentDisclosure, null);
+});
+
+test("a form that does not send the disclosure leaves it as it was", async () => {
+  const current = resolveSettings(
+    { ...stored, consentDisclosure: "Custom words." },
+    {},
+  );
+  const result = await updateOrganizationSettings(
+    { ...form, organizationName: "Acme Corporation" },
+    current,
+    fakeDatabase({ ...storedRow, consent_disclosure: "Custom words." })
+      .database,
+  );
+
+  assert.equal(result.organizationName, "Acme Corporation");
+  assert.equal(result.consentDisclosure, "Custom words.");
+});
+
+test("a disclosure with a heading and no words, or one that is too long, is refused", async () => {
+  const current = resolveSettings(stored, {});
+
+  for (const consentDisclosure of ["## Only a heading", "a".repeat(6001)]) {
+    const { database, saved } = fakeDatabase();
+
+    await assert.rejects(
+      updateOrganizationSettings(
+        { ...form, consentDisclosure },
+        current,
+        database,
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof OrganizationSettingsError);
+        assert.deepEqual(Object.keys(error.fieldErrors), ["consentDisclosure"]);
+
+        return true;
+      },
+    );
+    assert.equal(saved.values, null);
+  }
+});
+
+test("the hosted service keeps its own disclosure whatever the form sends", async () => {
+  const current = resolveSettings(stored, { HOSTED_MODE: "1" });
+  const { database } = fakeDatabase();
+  const result = await updateOrganizationSettings(
+    { ...form, consentDisclosure: "Our own words." },
+    current,
+    database,
+  );
+
+  assert.equal(result.consentDisclosure, null);
+});
+
+test("a change to the disclosure is listed in the audit trail", () => {
+  const changes = diffSettings(stored, {
+    ...stored,
+    consentDisclosure: "Custom words.",
+  });
+
+  assert.deepEqual(changes, {
+    consentDisclosure: { from: null, to: "Custom words." },
+  });
 });

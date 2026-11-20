@@ -1512,10 +1512,20 @@ export function SigningLiveShell({
           title="Before you sign"
         >
           <div className="well max-h-[45vh] space-y-4 overflow-y-auto px-4 py-4 text-sm leading-6 text-(--secondary) sm:px-5">
-            {record.disclosure.sections.map((section) => (
-              <section key={section.heading}>
-                <h3 className="font-bold text-(--fg)">{section.heading}</h3>
-                <p className="mt-1">{section.text}</p>
+            {record.disclosure.sections.map((section, index) => (
+              <section key={`${index}-${section.heading}`}>
+                {section.heading ? (
+                  <h3 className="font-bold text-(--fg)">{section.heading}</h3>
+                ) : null}
+                <p
+                  className={
+                    section.heading
+                      ? "mt-1 whitespace-pre-line"
+                      : "whitespace-pre-line"
+                  }
+                >
+                  {section.text}
+                </p>
               </section>
             ))}
           </div>

@@ -12,6 +12,13 @@ import { PeoplePanel } from "@/components/settings/people-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignerDataPanel } from "@/components/settings/signer-data-panel";
 import { WebhooksPanel } from "@/components/settings/webhooks-panel";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import type { EmailDnsRecord, EmailStatus } from "@/lib/email-status";
 import type {
   OrganizationSettingsField,
@@ -96,6 +103,15 @@ export function OrganizationSettings({
     };
   }
 
+  function setConsentDisclosure(consentDisclosure: string) {
+    setValues((currentValues) => ({ ...currentValues, consentDisclosure }));
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      consentDisclosure: undefined,
+    }));
+    setFeedback(null);
+  }
+
   function handleBrandColorChange(brandColor: string) {
     setValues((currentValues) => ({ ...currentValues, brandColor }));
     setErrors((currentErrors) => ({ ...currentErrors, brandColor: undefined }));
@@ -128,6 +144,7 @@ export function OrganizationSettings({
         body: JSON.stringify({
           allowedEmailDomains: values.allowedEmailDomains,
           brandColor: values.brandColor,
+          consentDisclosure: values.consentDisclosure,
           organizationName: values.organizationName,
           privacyUrl: values.privacyUrl,
           retentionDays: values.retentionDays,
@@ -358,6 +375,85 @@ export function OrganizationSettings({
                 </a>
                 . Check that it is right for your organization.
               </p>
+            </div>
+          ) : null}
+
+          {!values.hosted ? (
+            <div className="space-y-5 border-t border-(--border) pt-8">
+              <div className="space-y-2">
+                <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+                  What signers agree to before signing
+                </h3>
+                <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
+                  Optional. Signers read this and tick a box to agree to use
+                  electronic records and signatures before they sign. Leave it
+                  empty to show the standard text. The words each signer saw are
+                  kept with their record. Laws differ by place and by who signs,
+                  so ask a lawyer before shortening it.
+                </p>
+              </div>
+              <Field className="gap-2 text-sm">
+                <FieldLabel
+                  className="text-[0.8125rem] font-semibold text-(--secondary)"
+                  htmlFor="consent-disclosure"
+                >
+                  Disclosure text
+                </FieldLabel>
+                <Textarea
+                  aria-describedby="consent-disclosure-description"
+                  aria-invalid={errors.consentDisclosure ? true : undefined}
+                  className={
+                    errors.consentDisclosure
+                      ? "min-h-48 border-(--danger)"
+                      : "min-h-48"
+                  }
+                  disabled={isSaving}
+                  id="consent-disclosure"
+                  maxLength={6000}
+                  name="consent-disclosure"
+                  onChange={(event) => setConsentDisclosure(event.target.value)}
+                  placeholder="Standard text"
+                  value={values.consentDisclosure}
+                />
+                {errors.consentDisclosure ? (
+                  <FieldError
+                    className="text-xs font-semibold text-(--danger)"
+                    id="consent-disclosure-description"
+                  >
+                    {errors.consentDisclosure}
+                  </FieldError>
+                ) : (
+                  <FieldDescription
+                    className="text-xs leading-5 text-(--tertiary)"
+                    id="consent-disclosure-description"
+                  >
+                    Separate paragraphs with a blank line. Start a line with ##
+                    and a space to make a heading. Write {"{sender}"} where the
+                    sender&apos;s name goes and {"{contact}"} where the address
+                    to write to goes.
+                  </FieldDescription>
+                )}
+              </Field>
+              <div className="flex flex-wrap gap-3">
+                <ShellButton
+                  disabled={isSaving}
+                  onClick={() =>
+                    setConsentDisclosure(values.defaultConsentDisclosure)
+                  }
+                  variant="secondary"
+                >
+                  Start from the standard text
+                </ShellButton>
+                {values.consentDisclosure.length > 0 ? (
+                  <ShellButton
+                    disabled={isSaving}
+                    onClick={() => setConsentDisclosure("")}
+                    variant="ghost"
+                  >
+                    Use the standard text
+                  </ShellButton>
+                ) : null}
+              </div>
             </div>
           ) : null}
 

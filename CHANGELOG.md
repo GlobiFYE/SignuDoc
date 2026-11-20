@@ -39,9 +39,22 @@ release says when it does.
   the app with `postMessage` when the signer signs or declines. The
   certificate of completion says the signer was identified by the app.
 
+### Settings
+
+- An administrator can write the disclosure signers read and agree to before
+  signing, under Settings, Organization, "What signers agree to before
+  signing". It starts from the built-in text, which stays the default when the
+  setting is empty. A heading line starts with `## `, and `{sender}` and
+  `{contact}` fill in who is asking and who to write to. The version recorded
+  with each signer's agreement follows the text, and the audit trail keeps the
+  words the signer saw. The hosted service keeps the built-in text.
+
 This changes the database: the new `api_keys`, `api_idempotency`,
 `webhook_endpoints`, `webhook_deliveries` and `embed_allowed_origins`
-tables and six new columns are added by the migrations that run on deploy.
+tables and six new columns, plus the `app_settings.consent_disclosure`
+column, are added by the migrations that run on deploy. Until the last one
+has run, the consent setting reads as empty and signers see the built-in
+text.
 
 ## [0.5.2] - 2026-11-19
 

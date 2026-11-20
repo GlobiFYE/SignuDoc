@@ -45,7 +45,12 @@ import {
   signerRecordSchema,
   type CopyRecipientRecord,
 } from "./schemas/signer.ts";
-import { getBranding } from "./settings.ts";
+import {
+  getBranding,
+  getSettings,
+  readStoredSettings,
+  resolveSettings,
+} from "./settings.ts";
 import {
   checkSigningCredentials,
   MAX_SIGNING_PASSWORD_ATTEMPTS,
@@ -99,9 +104,10 @@ import {
 } from "./envelope-deadline.ts";
 import { describeEntryProblem, judgeRadioGroups } from "./field-choices.ts";
 import {
-  buildElectronicRecordsDisclosure,
+  buildDisclosureSections,
   CONSENT_STATEMENT,
-  ELECTRONIC_RECORDS_DISCLOSURE_VERSION,
+  getDisclosureVersion,
+  normalizeCustomDisclosure,
 } from "./electronic-records-disclosure.ts";
 import {
   checkAccessCode,
@@ -1755,7 +1761,14 @@ export async function recordSignerConsent(
     database,
   );
 
-  if (parsed.disclosureVersion !== ELECTRONIC_RECORDS_DISCLOSURE_VERSION) {
+  // Read from the database, not the settings cache, so that a disclosure an
+  // administrator has just changed is the one a signer is held to at once.
+  const customDisclosure = normalizeCustomDisclosure(
+    resolveSettings(await readStoredSettings(database)).consentDisclosure,
+  );
+  const disclosureVersion = getDisclosureVersion(customDisclosure);
+
+  if (parsed.disclosureVersion !== disclosureVersion) {
     throw new SigningMutationError(
       "The disclosure has changed. Reload the page to read the current one.",
       409,
@@ -1818,7 +1831,13 @@ export async function recordSignerConsent(
         ipAddress: requestMeta.ipAddress ?? null,
         metadata: {
           ...signerAuditMetadata(context),
-          disclosureVersion: ELECTRONIC_RECORDS_DISCLOSURE_VERSION,
+          disclosureVersion,
+          // The built-in words are known from their version. A custom
+          // disclosure can be changed or taken away later, so the words the
+          // signer saw are kept with the record.
+          ...(customDisclosure === null
+            ? {}
+            : { disclosureText: customDisclosure }),
           statement: CONSENT_STATEMENT,
         },
         userAgent: requestMeta.userAgent ?? null,
@@ -1972,6 +1991,9 @@ export async function getSigningPayloadForToken(
   );
   const storageService = createStorageService();
   const branding = await getBranding();
+  const customDisclosure = normalizeCustomDisclosure(
+    (await getSettings()).consentDisclosure,
+  );
 
   await recordViewedEventOnce(context, requestMeta, database);
 
@@ -2042,12 +2064,15 @@ export async function getSigningPayloadForToken(
     consentedAt: checkState.consentedAt,
     currentSignerFields,
     disclosure: {
-      sections: buildElectronicRecordsDisclosure({
-        contactAddress: branding.supportAddress ?? context.sender.email,
-        senderName: normalizeSenderName(context.sender),
-      }),
+      sections: buildDisclosureSections(
+        {
+          contactAddress: branding.supportAddress ?? context.sender.email,
+          senderName: normalizeSenderName(context.sender),
+        },
+        customDisclosure,
+      ),
       statement: CONSENT_STATEMENT,
-      version: ELECTRONIC_RECORDS_DISCLOSURE_VERSION,
+      version: getDisclosureVersion(customDisclosure),
     },
     declineUrl: getSigningDeclineUrl(token),
     documentUrl: getSigningDocumentUrl(token),
