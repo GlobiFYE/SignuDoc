@@ -1103,6 +1103,11 @@ export function SigningLiveShell({
                 <div className="flex justify-center xl:justify-end">
                   <SigningToolbarStatus
                     hasLockedFields={pageVisibleFields.length > 0}
+                    pageHasNoFields={
+                      isDocumentReady &&
+                      pageCurrentFields.length === 0 &&
+                      pageVisibleFields.length === 0
+                    }
                     remainingFields={remainingFields}
                   />
                 </div>
@@ -1212,22 +1217,6 @@ export function SigningLiveShell({
                             />
                           ))
                         : null}
-
-                      {isDocumentReady &&
-                      pageCurrentFields.length === 0 &&
-                      pageVisibleFields.length === 0 ? (
-                        <div className="absolute inset-0 z-1 flex items-center justify-center px-6">
-                          <div className="max-w-[320px] rounded-[1.25rem] border-2 border-dashed border-(--border-strong) bg-white/92 px-6 py-7 text-center">
-                            <p className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
-                              No signer fields on this page
-                            </p>
-                            <p className="mt-2 text-sm leading-6 text-(--secondary)">
-                              Move between pages to review your assigned fields
-                              and any completed values from earlier signers.
-                            </p>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1617,9 +1606,11 @@ export function SigningLiveShell({
 
 function SigningToolbarStatus({
   hasLockedFields,
+  pageHasNoFields,
   remainingFields,
 }: {
   hasLockedFields: boolean;
+  pageHasNoFields: boolean;
   remainingFields: number;
 }) {
   return (
@@ -1660,7 +1651,11 @@ function SigningToolbarStatus({
             : `${remainingFields} required remaining`}
         </p>
         <p className="text-xs leading-tight text-(--tertiary)">
-          {hasLockedFields ? "Locked values visible" : "Current signer view"}
+          {pageHasNoFields
+            ? "No fields on this page"
+            : hasLockedFields
+              ? "Locked values visible"
+              : "Current signer view"}
         </p>
       </div>
     </div>
