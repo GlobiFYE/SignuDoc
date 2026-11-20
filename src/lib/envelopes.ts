@@ -203,9 +203,24 @@ type CorrectSentEnvelopeSignerOptions = {
   nowUnixTimestamp?: number;
 };
 
+type ExpectedRecipient = { email: string; name: string };
+
 type SendDraftEnvelopeOptions = {
   database?: DbPool;
+  /**
+   * The people the caller confirmed. When given, the draft is sent only if
+   * its signers, in signing order, and its copy recipients are exactly
+   * these. The check runs on the parties the send holds unchanged until
+   * the invitation goes out.
+   */
+  expectedRecipients?: {
+    copyRecipients: readonly ExpectedRecipient[];
+    signers: readonly ExpectedRecipient[];
+  };
 };
+
+export const draftRecipientsChangedMessage =
+  "This draft's recipients were changed after the list was confirmed, so it was not sent. Check the draft and send it from there.";
 
 type VoidEnvelopeOptions = {
   database?: DbPool;
@@ -2501,6 +2516,47 @@ async function readDraftParties(envelopeId: string, database: DbExecutor) {
   return { copyRecipients, fields, signers };
 }
 
+function recipientKey(recipient: ExpectedRecipient): string {
+  return JSON.stringify([
+    recipient.email.trim().toLowerCase(),
+    recipient.name.trim(),
+  ]);
+}
+
+/**
+ * Whether a draft's parties are exactly the confirmed people: the signers
+ * in signing order, and the copy recipients in any order.
+ */
+export function draftRecipientsMatch(
+  parties: {
+    copyRecipients: readonly ExpectedRecipient[];
+    signers: readonly ExpectedRecipient[];
+  },
+  expected: {
+    copyRecipients: readonly ExpectedRecipient[];
+    signers: readonly ExpectedRecipient[];
+  },
+): boolean {
+  const sameInOrder = (
+    left: readonly ExpectedRecipient[],
+    right: readonly ExpectedRecipient[],
+  ) =>
+    left.length === right.length &&
+    left.every(
+      (recipient, index) =>
+        recipientKey(recipient) === recipientKey(right[index]!),
+    );
+  const sorted = (recipients: readonly ExpectedRecipient[]) =>
+    [...recipients].sort((left, right) =>
+      recipientKey(left).localeCompare(recipientKey(right)),
+    );
+
+  return (
+    sameInOrder(parties.signers, expected.signers) &&
+    sameInOrder(sorted(parties.copyRecipients), sorted(expected.copyRecipients))
+  );
+}
+
 /**
  * Takes hold of a draft before its signers or fields are changed, and
  * refuses when it is no longer a draft. Saving signers, saving fields,
@@ -2554,7 +2610,7 @@ export async function sendDraftEnvelope(
   userId: string,
   envelopeId: string,
   input: SendDraftEnvelopeInput,
-  { database = getDb() }: SendDraftEnvelopeOptions = {},
+  { database = getDb(), expectedRecipients }: SendDraftEnvelopeOptions = {},
 ): Promise<SendDraftEnvelopeResult> {
   const envelope = await getEnvelopeByIdForUser(userId, envelopeId, database);
 
@@ -2568,6 +2624,15 @@ export async function sendDraftEnvelope(
 
   const checkedParties = await readDraftParties(envelopeId, database);
   const { fields, signers } = checkedParties;
+
+  // The transaction below refuses a draft whose parties changed after this
+  // read, so the people checked here are the people the invitation reaches.
+  if (
+    expectedRecipients &&
+    !draftRecipientsMatch(checkedParties, expectedRecipients)
+  ) {
+    throw new EnvelopeMutationError(draftRecipientsChangedMessage, 409);
+  }
 
   if (signers.length === 0 || fields.length === 0) {
     throw new EnvelopeMutationError(

@@ -68,7 +68,7 @@ The dashboard shows each document as a card with its first page, its status (dra
 
 ### Templates for the documents you send every week
 
-Open any envelope and choose Save as template. The template keeps the document, the fields and the signing order, with roles instead of names. Using it asks who signs this time and opens a draft ready to send.
+Open any envelope and choose Save as template. The template keeps the document, the fields and the signing order, with roles instead of names. Using it asks who signs this time and opens a draft ready to send. Send to many takes a CSV of names and addresses and sends one envelope per row.
 
 ### Sealed, certified, and checkable by anyone
 

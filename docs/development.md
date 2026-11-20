@@ -73,7 +73,7 @@ The first time you open the app it takes you to `/setup`, where you name the org
 
 People added to receive a copy do not sign. They are sent the finished document and its certificate at step 7 and nothing before it.
 
-A document you send often can be kept as a template: open any envelope, sent or not, and choose Save as template. The template keeps the document, the fields and the signing order, and no one's name or email address. Using it asks who signs this time and opens a draft at step 4.
+A document you send often can be kept as a template: open any envelope, sent or not, and choose Save as template. The template keeps the document, the fields and the signing order, and no one's name or email address. Using it asks who signs this time and opens a draft at step 4. Send to many takes a CSV of names and addresses and sends one envelope per row, so the same form can go out to many people without repeating those steps.
 
 ## Storage
 
